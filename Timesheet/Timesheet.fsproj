@@ -21,6 +21,7 @@
       <Content Include="ApiResponseSamples\GitLabMergeRequests.json" />
       <Content Include="ApiResponseSamples\GitLabProjects.json" />
       <Content Include="ConfigSample.json" />
+      <Content Include="README.md" />
     </ItemGroup>
 
 </Project>
