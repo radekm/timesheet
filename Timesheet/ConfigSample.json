@@ -1,0 +1,7 @@
+{
+  "GitLab": {
+    "ApiUrl": "https://gitlab.com/api",
+    "ApiToken": "token",
+    "UserName": "user"
+  }
+}
