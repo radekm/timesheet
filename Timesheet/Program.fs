@@ -5,7 +5,6 @@ open System.IO
 open System.Runtime.Serialization.Formatters.Binary
 open System.Text.RegularExpressions
 open FSharp.Data
-open GitLab
 
 type Config = JsonProvider<"ConfigSample.json">
 
@@ -35,17 +34,20 @@ let fetchDataFromGitLab config =
     } |> Seq.toList
 
 module DataFile =
-    let gitLab dataFolder = Path.Combine(dataFolder, "GitLab.bin")                             
+    let gitLab dataFolder =
+        Path.Combine(dataFolder, "GitLab.bin")
+        |> Path.GetFullPath                             
 
 let downloadData (config : Config.Root) dataFolder =
     let gitLabConfig =
         { GitLab.ApiUrl = config.GitLab.ApiUrl
           GitLab.ApiToken = config.GitLab.ApiToken }
 
-    printfn "Downloading data from GitLab"
+    let gitLabDataFile = DataFile.gitLab dataFolder
+    printfn $"Downloading data from GitLab into %s{gitLabDataFile}"
     let mrs = fetchDataFromGitLab gitLabConfig
 
-    use stream = File.OpenWrite <| DataFile.gitLab dataFolder
+    use stream = File.OpenWrite gitLabDataFile
     let bf = BinaryFormatter()
     bf.Serialize(stream, mrs)
     printfn "Data from GitLab downloaded and saved"
