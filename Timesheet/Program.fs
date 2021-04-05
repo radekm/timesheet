@@ -8,56 +8,48 @@ open FSharp.Data
 
 type Config = JsonProvider<"ConfigSample.json">
 
-type MergeRequest =
-    { Proj : GitLab.Projects.Root
-      MR : GitLab.MergeRequests.Root
-      Discussions : list<GitLab.Discussions.Root>
-      Emoticons : list<GitLab.Emoticons.Root>
-      Changes: GitLab.Changes.Root
-    }
-
-let fetchDataFromGitLab config =
-    let projs = GitLab.listProjectsOfCurrentUser config
-    seq {
-        for proj in projs do
-            let mrs = GitLab.listMergeRequests config proj.Id
-            for mr in mrs do
-                let discussions = GitLab.listDiscussionsForMergeRequest config proj.Id mr.Iid
-                let emoticons = GitLab.listEmoticonsForMergeRequest config proj.Id mr.Iid
-                let changes = GitLab.listChangesForMergeRequest config proj.Id mr.Iid
-                yield { Proj = proj
-                        MR = mr
-                        Discussions = discussions
-                        Emoticons = emoticons
-                        Changes = changes
-                      }
-    } |> Seq.toList
-
 module DataFile =
     let gitLab dataFolder =
         Path.Combine(dataFolder, "GitLab.bin")
         |> Path.GetFullPath                             
 
-let downloadData (config : Config.Root) dataFolder =
+    let teams dataFolder =
+        Path.Combine(dataFolder, "Teams.bin")
+        |> Path.GetFullPath
+        
+    let write dataFile (graph : obj) =
+        use stream = File.OpenWrite dataFile
+        let bf = BinaryFormatter()
+        bf.Serialize(stream, graph)
+
+let downloadDataFromGitLab (config : Config.Root) dataFolder =
     let gitLabConfig =
         { GitLab.ApiUrl = config.GitLab.ApiUrl
           GitLab.ApiToken = config.GitLab.ApiToken }
 
     let gitLabDataFile = DataFile.gitLab dataFolder
     printfn $"Downloading data from GitLab into %s{gitLabDataFile}"
-    let mrs = fetchDataFromGitLab gitLabConfig
+    let mrs = GitLab.fetchData gitLabConfig
 
-    use stream = File.OpenWrite gitLabDataFile
-    let bf = BinaryFormatter()
-    bf.Serialize(stream, mrs)
+    DataFile.write gitLabDataFile mrs
     printfn "Data from GitLab downloaded and saved"
+    
+let downloadDataFromTeams (config : Config.Root) dataFolder =
+    let teamsConfig = { Teams.AppId = config.Teams.AppId }
+    
+    let teamsDataFile = DataFile.teams dataFolder
+    printfn $"Downloading data from Teams into %s{teamsDataFile}"
+    let conversations = Teams.fetchData teamsConfig
+
+    DataFile.write teamsDataFile conversations
+    printfn "Data from Teams downloaded and saved"
 
 let printSummary (config : Config.Root) dataFolder (fromDate : DateTime) (toDate : DateTime) =
     let userName = config.GitLab.UserName
     
     let bf = BinaryFormatter()
     use stream = File.OpenRead <| DataFile.gitLab dataFolder
-    let mrs = bf.Deserialize(stream) :?> list<MergeRequest>
+    let mrs = bf.Deserialize(stream) :?> list<GitLab.MergeRequest>
 
     let dates =
         Seq.initInfinite (float >> fromDate.AddDays)
@@ -139,7 +131,8 @@ let main argv =
     let dataFolder = argv.[2]
     
     match command with
-    | "download-data" -> downloadData config dataFolder
+    | "download-data-gitlab" -> downloadDataFromGitLab config dataFolder
+    | "download-data-teams" -> downloadDataFromTeams config dataFolder
     | "print-summary" ->
         let fromDate = DateTime.Parse argv.[3]
         let toDate = DateTime.Parse argv.[4]

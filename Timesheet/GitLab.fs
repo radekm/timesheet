@@ -73,3 +73,28 @@ let listChangesForMergeRequest config projId mrIid =
     let resp = request config path
     let changes = Changes.Parse resp
     changes
+
+type MergeRequest =
+    { Proj : Projects.Root
+      MR : MergeRequests.Root
+      Discussions : list<Discussions.Root>
+      Emoticons : list<Emoticons.Root>
+      Changes: Changes.Root
+    }
+
+let fetchData (config : Config) =
+    let projs = listProjectsOfCurrentUser config
+    seq {
+        for proj in projs do
+            let mrs = listMergeRequests config proj.Id
+            for mr in mrs do
+                let discussions = listDiscussionsForMergeRequest config proj.Id mr.Iid
+                let emoticons = listEmoticonsForMergeRequest config proj.Id mr.Iid
+                let changes = listChangesForMergeRequest config proj.Id mr.Iid
+                yield { Proj = proj
+                        MR = mr
+                        Discussions = discussions
+                        Emoticons = emoticons
+                        Changes = changes
+                      }
+    } |> Seq.toList

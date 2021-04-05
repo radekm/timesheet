@@ -7,11 +7,13 @@
 
     <ItemGroup>
         <Compile Include="GitLab.fs" />
+        <Compile Include="Teams.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 
     <ItemGroup>
       <PackageReference Include="FSharp.Data" Version="4.0.1" />
+      <PackageReference Include="Microsoft.Graph.Beta" Version="4.0.1-preview" />
     </ItemGroup>
 
     <ItemGroup>

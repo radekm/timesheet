@@ -3,5 +3,8 @@
     "ApiUrl": "https://gitlab.com/api",
     "ApiToken": "token",
     "UserName": "user"
+  },
+  "Teams": {
+    "AppId": "id"
   }
 }
