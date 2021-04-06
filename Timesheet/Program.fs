@@ -2,9 +2,10 @@
 
 open System
 open System.IO
-open System.Runtime.Serialization.Formatters.Binary
 open System.Text.RegularExpressions
+
 open FSharp.Data
+open MBrace.FsPickler
 
 type Config = JsonProvider<"ConfigSample.json">
 
@@ -17,15 +18,15 @@ module DataFile =
         Path.Combine(dataFolder, "Teams.bin")
         |> Path.GetFullPath
 
-    let read dataFile : obj = 
-        let bf = BinaryFormatter()
+    let read dataFile =
+        let ser = FsPickler.CreateBinarySerializer()
         use stream = File.OpenRead dataFile
-        bf.Deserialize stream
+        ser.Deserialize stream
 
-    let write dataFile (graph : obj) =
+    let write dataFile graph =
         use stream = File.OpenWrite dataFile
-        let bf = BinaryFormatter()
-        bf.Serialize(stream, graph)
+        let ser = FsPickler.CreateBinarySerializer()
+        ser.Serialize(stream, graph)
 
 let downloadDataFromGitLab (config : Config.Root) dataFolder =
     let gitLabConfig =
@@ -52,7 +53,7 @@ let downloadDataFromTeams (config : Config.Root) dataFolder =
 let printSummary (config : Config.Root) dataFolder (fromDate : DateTime) (toDate : DateTime) =
     let userName = config.GitLab.UserName
     
-    let mrs = (DataFile.gitLab dataFolder |> DataFile.read) :?> list<GitLab.MergeRequest>
+    let mrs : list<GitLab.MergeRequest> = DataFile.gitLab dataFolder |> DataFile.read
 
     let dates =
         Seq.initInfinite (float >> fromDate.AddDays)
