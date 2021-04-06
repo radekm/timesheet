@@ -16,6 +16,9 @@ whose activities we want to summarize.
     "ApiUrl": "https://gitlab.com/api",
     "ApiToken": "token",
     "UserName": "user"
+  },
+  "Teams": {
+    "AppId": "id"
   }
 }
 ```
@@ -25,7 +28,8 @@ whose activities we want to summarize.
 To download data call:
 
 ```
-Timesheet.dll download-data ../../../Config.json ../../../
+Timesheet.dll download-data-gitlab Config.json .
+Timesheet.dll download-data-teams Config.json .
 ```
 
 # Printing summary of activities
@@ -33,5 +37,5 @@ Timesheet.dll download-data ../../../Config.json ../../../
 To print a summary of activities of a user from the config:
 
 ```
-Timesheet.dll  print-summary ../../../Config.json ../../../ 2020-2-24 2020-5-1
+Timesheet.dll  print-summary Config.json . 2020-2-24 2020-5-1
 ```

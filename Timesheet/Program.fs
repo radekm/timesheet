@@ -16,7 +16,12 @@ module DataFile =
     let teams dataFolder =
         Path.Combine(dataFolder, "Teams.bin")
         |> Path.GetFullPath
-        
+
+    let read dataFile : obj = 
+        let bf = BinaryFormatter()
+        use stream = File.OpenRead dataFile
+        bf.Deserialize stream
+
     let write dataFile (graph : obj) =
         use stream = File.OpenWrite dataFile
         let bf = BinaryFormatter()
@@ -47,9 +52,7 @@ let downloadDataFromTeams (config : Config.Root) dataFolder =
 let printSummary (config : Config.Root) dataFolder (fromDate : DateTime) (toDate : DateTime) =
     let userName = config.GitLab.UserName
     
-    let bf = BinaryFormatter()
-    use stream = File.OpenRead <| DataFile.gitLab dataFolder
-    let mrs = bf.Deserialize(stream) :?> list<GitLab.MergeRequest>
+    let mrs = (DataFile.gitLab dataFolder |> DataFile.read) :?> list<GitLab.MergeRequest>
 
     let dates =
         Seq.initInfinite (float >> fromDate.AddDays)
@@ -127,7 +130,10 @@ let printSummary (config : Config.Root) dataFolder (fromDate : DateTime) (toDate
 [<EntryPoint>]
 let main argv =
     let command = argv.[0]
-    let config = Config.Load argv.[1]
+    let config =
+        let path = Path.GetFullPath argv.[1]
+        printfn $"Loading config from %s{path}"
+        Config.Load path
     let dataFolder = argv.[2]
     
     match command with
