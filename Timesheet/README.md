@@ -32,10 +32,10 @@ Timesheet.dll download-data-gitlab Config.json .
 Timesheet.dll download-data-teams Config.json .
 ```
 
-# Printing summary of activities
+# Writing summary of activities
 
-To print a summary of activities of a user from the config:
+To write a summary of activities of a user from the config:
 
 ```
-Timesheet.dll  print-summary Config.json . 2020-2-24 2020-5-1
+Timesheet.dll  write-summary Config.json . 2020-2-24 2020-5-1
 ```

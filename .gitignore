@@ -10,4 +10,5 @@ obj/
 /Timesheet/Config.json
 # My data files
 /Timesheet/*.bin
-
+# My report
+/Timesheet/report.html
