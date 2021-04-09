@@ -125,6 +125,7 @@ let listChats (client : GraphServiceClient) : Chat list =
             try
                 client.Me.Chats.[ch.Id].Members.Request()
                 |> getItems
+                // FIXME `m.Id` is not user id.
                 |> List.map (fun m -> { Id = m.Id; Name = m.DisplayName })
             with _ when ch.ChatType.Value = ChatType.Meeting ->
                 printfn $"Unable to list members of meeting %s{ch.Id} about %A{topic}"

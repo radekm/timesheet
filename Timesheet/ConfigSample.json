@@ -5,6 +5,7 @@
     "UserName": "user"
   },
   "Teams": {
-    "AppId": "id"
+    "AppId": "id",
+    "UserId": "id"
   }
 }

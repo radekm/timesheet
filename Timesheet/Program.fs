@@ -13,7 +13,7 @@ type Config = JsonProvider<"ConfigSample.json">
 module DataFile =
     let gitLab dataFolder =
         Path.Combine(dataFolder, "GitLab.bin")
-        |> Path.GetFullPath                             
+        |> Path.GetFullPath
 
     let teams dataFolder =
         Path.Combine(dataFolder, "Teams.bin")
@@ -40,10 +40,10 @@ let downloadDataFromGitLab (config : Config.Root) dataFolder =
 
     DataFile.write gitLabDataFile mrs
     printfn "Data from GitLab downloaded and saved"
-    
+
 let downloadDataFromTeams (config : Config.Root) dataFolder =
     let teamsConfig = { Teams.AppId = config.Teams.AppId }
-    
+
     let teamsDataFile = DataFile.teams dataFolder
     printfn $"Downloading data from Teams into %s{teamsDataFile}"
     let conversations = Teams.fetchData teamsConfig
@@ -55,7 +55,10 @@ let writeSummary (config : Config.Root) dataFolder (fromDate : DateTime) (toDate
     let gitLabUserName = config.GitLab.UserName
     let mrs : list<GitLab.MergeRequest> = DataFile.gitLab dataFolder |> DataFile.read
 
-    let report = Report.htmlReport fromDate toDate gitLabUserName mrs
+    let teamsUserId = config.Teams.UserId
+    let conversations : Teams.AllConversations = DataFile.teams dataFolder |> DataFile.read
+
+    let report = Report.htmlReport fromDate toDate gitLabUserName teamsUserId mrs conversations
     let html = RenderView.AsBytes.htmlDocument report
     let path = "report.html" |> Path.GetFullPath
     printfn "Writing summary to %s" path
@@ -69,7 +72,7 @@ let main argv =
         printfn $"Loading config from %s{path}"
         Config.Load path
     let dataFolder = argv.[2]
-    
+
     match command with
     | "download-data-gitlab" -> downloadDataFromGitLab config dataFolder
     | "download-data-teams" -> downloadDataFromTeams config dataFolder
