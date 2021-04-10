@@ -27,6 +27,7 @@
       <Content Include="ApiResponseSamples\GitLabProjects.json" />
       <Content Include="ConfigSample.json" />
       <Content Include="README.md" />
+      <Content Include="TODO.md" />
     </ItemGroup>
 
 </Project>
