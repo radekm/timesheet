@@ -118,46 +118,83 @@ let testMessage
     let hasDay = belongsToDay day msg.Created
     hasAuthor && hasDay
 
+type ChatSummaryItem =
+    | SkippedMessages
+    // Not important messages are present only as a context for important ones.
+    | Message of {| Message : Teams.Message; Important : bool |}
+
+let summarizeChatMessages
+    (day : DateTime)
+    (userId : string)
+    (messages : Teams.Message list) : ChatSummaryItem list =
+
+    let mutable numOfMessagesToInclude = -1
+    messages
+    // Ignore messages from different days.
+    |> List.filter (fun m -> belongsToDay day m.Created)
+    // Mark messages from `userId` as important.
+    |> List.map (fun m -> {| Message = m; Important = m.Author |> Option.exists (fun a -> a.Id = userId) |})
+    |> List.rev
+    |> List.choose (fun m ->
+        if m.Important then
+            // Include important message + 3 additional messages as a context.
+            numOfMessagesToInclude <- 4
+        numOfMessagesToInclude <- numOfMessagesToInclude - 1
+        match numOfMessagesToInclude with
+        | n when n >= 0 -> Some (Message m)
+        | -1 -> Some SkippedMessages
+        | _ -> None)
+    |> List.rev
+
+type ChatSummary = { Chat : Teams.Chat; Messages : ChatSummaryItem list }
+
+let summarizeChat (day : DateTime) (userId : string) (chat : Teams.ChatWithMessages) : ChatSummary =
+    { Chat = chat.Chat
+      Messages =
+        chat.Messages
+        // There are no replies in chat.
+        |> List.map (fun msgWithReplies -> msgWithReplies.Message)
+        |> summarizeChatMessages day userId
+    }
+
+type ChannelSummaryItem = { Message : Teams.Message; Important : bool; Replies : ChatSummaryItem list }
+
+type ChannelSummary = { Channel : Teams.Channel; Messages : ChannelSummaryItem list }
+
+let summarizeChannel (day : DateTime) (userId : string) (channel : Teams.ChannelWithMessages) : ChannelSummary =
+    { Channel = channel.Channel
+      Messages =
+        channel.Messages
+        |> List.map (fun msgWithReplies ->
+            let m = msgWithReplies.Message
+            { Message = m
+              Important = belongsToDay day m.Created && m.Author |> Option.exists (fun a -> a.Id = userId)
+              Replies = summarizeChatMessages day userId msgWithReplies.Replies
+            })
+        |> List.filter (fun m -> m.Important || not m.Replies.IsEmpty)
+    }
+
 let summarizeConversations
     (day : DateTime)
     (userId : string)
     (conversations : Teams.AllConversations) =
 
-    let testMessage = testMessage day userId
+    {| Channels =
+        conversations.Channels
+        |> List.map (summarizeChannel day userId)
+        |> List.filter (fun s -> not s.Messages.IsEmpty)
+       Chats =
+        conversations.Chats
+        |> List.map (summarizeChat day userId)
+        |> List.filter (fun s -> not s.Messages.IsEmpty)
+    |}
 
-    let filterMessageWithReplies (m : Teams.MessageWithReplies) : Teams.MessageWithReplies option =
-        let replies = m.Replies |> List.filter testMessage
-        // Retain message if it passes test or if some reply passes test.
-        if testMessage m.Message || not replies.IsEmpty
-        then Some { m with Replies = replies  }
-        else None
-    let filterChannel (ch : Teams.ChannelWithMessages) : Teams.ChannelWithMessages option =
-        let messages = ch.Messages |> List.choose filterMessageWithReplies
-        // Retain channel if it contains messages which passed test.
-        if not messages.IsEmpty
-        then Some { ch with Messages = messages }
-        else None
-    let filterChat (ch : Teams.ChatWithMessages) : Teams.ChatWithMessages option =
-        let messages = ch.Messages |> List.choose filterMessageWithReplies
-        // Retain chat if it contains messages which passed test.
-        if not messages.IsEmpty
-        then Some { ch with Messages = messages }
-        else None
-
-    { Teams.Channels = conversations.Channels |> List.choose filterChannel
-      Teams.Chats = conversations.Chats |> List.choose filterChat
-    }
-
-// TODO Maybe only `summarizeConversations` should use `day` and `userId`. 
 let formatConversationSummary
-    (day : DateTime)
-    (userId : string)
-    (summary : Teams.AllConversations) =
+    (summary : {| Channels : ChannelSummary list; Chats : ChatSummary list |}) =
 
-    let testMessage = testMessage day userId
-    let formatBody (msg : Teams.Message) =
+    let formatBody (msg : Teams.Message) (important : bool) =
         let style =
-            if testMessage msg
+            if important
             then "color: #000"
             else "color: #999"
         match msg.Body with
@@ -167,48 +204,54 @@ let formatConversationSummary
             |> List.head
             |> HtmlNode.innerText
         |> fun s ->
-            if s.Length > 300
-            then s.Substring(0, 300) + "…"
+            if s.Length > 500
+            then s.Substring(0, 500) + "…"
             else s
         |> str
         |> fun node -> span [_style style] [node]
 
-    let formatConversationSummary (name : string) (messages : Teams.MessageWithReplies list) =
-        messages
+    let formatChatMessagesSummary (messages : ChatSummaryItem list) =
+        match messages with
+        | [] -> span [] []
+        | _ ->
+            messages
+            |> List.map (function
+                | SkippedMessages -> li [] [str "⋮"]
+                | Message m -> li [] [formatBody m.Message m.Important])
+            |> ul []
+
+    let formatChannelSummary (s : ChannelSummary) =
+        s.Messages
         |> List.map (fun m ->
-            let replies =
-                match m.Replies with
-                | [] -> span [] []
-                | _ ->
-                    m.Replies
-                    |>  List.map (fun r -> li [] [formatBody r])
-                    |> ul []
+            let replies = formatChatMessagesSummary m.Replies
             li [] [
-                formatBody m.Message
+                formatBody m.Message m.Important
                 replies
             ])
         |> ul []
         |> fun messages ->
+            let name = $"%s{s.Channel.Team.Name} / %s{s.Channel.Name}"
             div [] [
                 h4 [] [str name]
                 messages
             ]
 
-    let channels =
-        summary.Channels
-        |> List.map (fun ch ->
-            let name = $"%s{ch.Channel.Team.Name} / %s{ch.Channel.Name}"
-            formatConversationSummary name ch.Messages)
-    let chats =
-        summary.Chats
-        |> List.map (fun ch ->
-            let topic = ch.Chat.Topic |> Option.map (sprintf " (%s)") |> Option.defaultValue ""
+    let formatChatSummary (s : ChatSummary) =
+        formatChatMessagesSummary s.Messages
+        |> fun messages ->
+            let topic = s.Chat.Topic |> Option.map (sprintf " (%s)") |> Option.defaultValue ""
             let name =
-                ch.Chat.Members
+                s.Chat.Members
                 |> List.map (fun m -> m.Name)
                 |> String.concat ", "
                 |> fun members -> sprintf $"%s{members}%s{topic}"
-            formatConversationSummary name ch.Messages)
+            div [] [
+                h4 [] [str name]
+                messages
+            ]
+
+    let channels = summary.Channels |> List.map formatChannelSummary
+    let chats = summary.Chats |> List.map formatChatSummary
     div [] (channels @ chats)
 
 let htmlReport
@@ -230,7 +273,7 @@ let htmlReport
         div [] [
             h2 [] [day.ToString "ddd d (MMMM)" |> str]
             formatMrsSummaries mrSummaries
-            formatConversationSummary day teamsUserId conversationSummary
+            formatConversationSummary conversationSummary
         ])
     |> Seq.toList
     |> div []
