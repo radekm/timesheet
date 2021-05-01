@@ -132,6 +132,7 @@ let summarizeChatMessages
     messages
     // Ignore messages from different days.
     |> List.filter (fun m -> belongsToDay day m.Created)
+    |> List.sortBy (fun m -> m.Created)
     // Mark messages from `userId` as important.
     |> List.map (fun m -> {| Message = m; Important = m.Author |> Option.exists (fun a -> a.Id = userId) |})
     |> List.rev
@@ -172,6 +173,7 @@ let summarizeChannel (day : DateTime) (userId : string) (channel : Teams.Channel
               Replies = summarizeChatMessages day userId msgWithReplies.Replies
             })
         |> List.filter (fun m -> m.Important || not m.Replies.IsEmpty)
+        |> List.sortBy (fun m -> m.Message.Created)
     }
 
 let summarizeConversations
