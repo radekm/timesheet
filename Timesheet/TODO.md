@@ -9,9 +9,12 @@
     One option is to create custom converter for `JsonValue` from `FSharp.Data`.
     Other option is replace provided classes by custom records
     (ie. provided classes will be used only for deserializing responses from GitLab).
+  - Consider EF Core with SQLite.
 - Properly count number of commits. Or do we want to count
   number of pushes?
 - It seems that messages from MS Graph API are in reverse order.
   Is it always the case or do we accidentally reverse it somewhere in the code?
   Now it's fixed by sorting in `summarizeChatMessages` and `summarizeChannel`.
   Do we need that sorting or is there another fix?
+- Download and store commit messages and show them in report. 
+- Don't store nor download diffs.
