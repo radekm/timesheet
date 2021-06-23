@@ -52,34 +52,35 @@ type private DeviceCodeAuth(appId : string, scopes : string list) =
                 request.Headers.Authorization <- AuthenticationHeaderValue("bearer", token)
             } |> Async.StartAsTask :> Task
 
-// Microsoft Graph Beta doesn't have `PageIterator` so we implemented that here.
 let inline getItems< 'A, ^Pg, ^Req when ^Req : (member GetAsync : CancellationToken -> Task<'Pg>)
                                    and  ^Req : (member Client : IBaseClient)
                                    and  ^Req : null
-                                   and  ^Pg :> ICollectionPage<'A>
-                                   and  ^Pg : (member InitializeNextPageRequest : IBaseClient * string -> unit)
-                                   and  ^Pg : (member NextPageRequest : ^Req) >
+                                   and  ^Pg :> ICollectionPage<'A> >
     (req : ^Req) : 'A list =
 
     let client = (^Req : (member Client : IBaseClient) req)
     let result = ResizeArray()
+    let page =
+        (^Req : (member GetAsync : CancellationToken -> Task<'Pg>) (req, Unchecked.defaultof<_>))
+        |> Async.AwaitTask
+        |> Async.RunSynchronously
+    let addItem (item : 'A) =
+        result.Add item
+        if result.Count > 0 && result.Count % 200 = 0 then
+            Thread.Sleep 5000
+            printfn "Got %d items. Throttling to prevent getting 'TooManyRequests' error" result.Count
+        true
 
-    let rec go req =
-        let page = (^Req : (member GetAsync : CancellationToken -> Task<'Pg>) (req, Unchecked.defaultof<_>)).Result
-        page
-        |> Seq.iter result.Add
-
-        // Try to use a link to the next page (if any) to initialize a request for the next page.
-        match page.AdditionalData.TryGetValue "@odata.nextLink" with
-        | true, next ->
-            (^Pg : (member InitializeNextPageRequest : IBaseClient * string -> unit) (page, client, string next))
-        | _ -> ()
-
-        // If request to the next page was initialized then download the next page.
-        match (^Pg : (member NextPageRequest : ^Req) page) with
-        | null -> ()
-        | req -> go req
-    go req
+    try
+        PageIterator.CreatePageIterator(client, page, Func<_, _> addItem).IterateAsync()
+        |> Async.AwaitTask
+        |> Async.RunSynchronously
+    with e ->
+        // Ignore loop error - retrying doesn't help.
+        if e.Message.Contains "Detected nextLink loop" then
+            printfn "Loop detected: %s" e.Message
+        else
+            reraise ()
 
     result |> Seq.toList
 
@@ -217,9 +218,12 @@ let fetchChat (client : GraphServiceClient) (ch : Chat) : ChatWithMessages =
         |> List.map (fun m -> { Message = m; Replies = [] })
     { Chat = ch; Messages = messagesWithReplies }
 
-let fetchData (config : Config) : AllConversations =
+let createClient (config : Config) =
     let scopesForTeams = ["User.Read"; "Chat.Read"; "Team.ReadBasic.All"; "Channel.ReadBasic.All"]
-    let client = GraphServiceClient(DeviceCodeAuth(config.AppId, scopesForTeams))
+    GraphServiceClient(DeviceCodeAuth(config.AppId, scopesForTeams))
+
+let fetchData (config : Config) : AllConversations =
+    let client = createClient config
 
     { Channels =
           listChannels client
