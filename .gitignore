@@ -12,3 +12,5 @@ obj/
 /Timesheet/*.bin
 # My report
 /Timesheet/report.html
+# My database
+/Timesheet/Timesheet.db*

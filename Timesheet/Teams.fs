@@ -89,7 +89,16 @@ type Team = { Id : string; Name : string }
 // More permissions are needed to list channel members. So we omit that.
 type Channel = { Team : Team; Id : string; Name : string }
 // Chat members can be listed.
-type Chat = { Id : string; Members : User list; Type : string; Topic : string option }
+type Chat =
+    { Id : string; Members : User list; Type : string; Topic : string option }
+    member me.Name =
+        let topic = me.Topic |> Option.map (sprintf " (%s)") |> Option.defaultValue ""
+        let members =
+            me.Members
+            |> List.map (fun m -> m.Name)
+            |> String.concat ", "
+        sprintf $"%s{members}%s{topic}"
+
 type Reaction = { ReactionType : string; UserId : string; Created: DateTimeOffset }
 [<RequireQualifiedAccess>]
 type Mention = User of User | Other of string
@@ -127,10 +136,12 @@ let listChats (client : GraphServiceClient) : Chat list =
                 client.Me.Chats.[ch.Id].Members.Request()
                 |> getItems
                 |> List.map (function
-                    | :? AadUserConversationMember as m -> { Id = m.UserId; Name = m.DisplayName }
+                    | :? AadUserConversationMember as m -> { Id = m.UserId; Name = m.DisplayName } : User
                     | m ->
                         // `m.Id` is generally not user id.
                         failwithf $"Cannot get user id of %s{m.DisplayName}, it has type: %A{m.GetType()}")
+                // Sorting ensures that output of this function is deterministic.
+                |> List.sortBy (fun user -> user.Id)
             with _ when ch.ChatType.Value = ChatType.Meeting ->
                 printfn $"Unable to list members of meeting %s{ch.Id} about %A{topic}"
                 []

@@ -241,14 +241,8 @@ let formatConversationSummary
     let formatChatSummary (s : ChatSummary) =
         formatChatMessagesSummary s.Messages
         |> fun messages ->
-            let topic = s.Chat.Topic |> Option.map (sprintf " (%s)") |> Option.defaultValue ""
-            let name =
-                s.Chat.Members
-                |> List.map (fun m -> m.Name)
-                |> String.concat ", "
-                |> fun members -> sprintf $"%s{members}%s{topic}"
             div [] [
-                h4 [] [str name]
+                h4 [] [str s.Chat.Name]
                 messages
             ]
 
