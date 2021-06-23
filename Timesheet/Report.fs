@@ -153,8 +153,6 @@ let summarizeChat (day : DateTime) (userId : string) (chat : Teams.ChatWithMessa
     { Chat = chat.Chat
       Messages =
         chat.Messages
-        // There are no replies in chat.
-        |> List.map (fun msgWithReplies -> msgWithReplies.Message)
         |> summarizeChatMessages day userId
     }
 

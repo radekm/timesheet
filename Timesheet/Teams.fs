@@ -204,9 +204,8 @@ type MessageWithReplies = { Message : Message
 type ChannelWithMessages = { Channel : Channel
                              Messages : MessageWithReplies list }
 
-/// Chat doesn't have replies - we use `MessageWithReplies` to unify processing with channels.
 type ChatWithMessages = { Chat : Chat
-                          Messages : MessageWithReplies list }
+                          Messages : Message list }
 
 type AllConversations = { Channels : ChannelWithMessages list
                           Chats : ChatWithMessages list }
@@ -223,11 +222,8 @@ let fetchChat (client : GraphServiceClient) (ch : Chat) : ChatWithMessages =
         let memberNames = ch.Members |> List.map (fun m -> m.Name)
         let about = ch.Topic |> Option.map (sprintf " about %s") |> Option.defaultValue ""
         printfn $"Downloading %s{ch.Type} chat %s{ch.Id} with %A{memberNames}%s{about}"
-    let messagesWithReplies =
-        listChatMessages client ch
-        // There are no replies in chats.
-        |> List.map (fun m -> { Message = m; Replies = [] })
-    { Chat = ch; Messages = messagesWithReplies }
+    let messages = listChatMessages client ch
+    { Chat = ch; Messages = messages }
 
 let createClient (config : Config) =
     let scopesForTeams = ["User.Read"; "Chat.Read"; "Team.ReadBasic.All"; "Channel.ReadBasic.All"]
