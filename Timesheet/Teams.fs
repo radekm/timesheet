@@ -76,9 +76,10 @@ let inline getItems< 'A, ^Pg, ^Req when ^Req : (member GetAsync : CancellationTo
         |> Async.AwaitTask
         |> Async.RunSynchronously
     with e ->
-        // Ignore loop error - retrying doesn't help.
         if e.Message.Contains "Detected nextLink loop" then
             printfn "Loop detected: %s" e.Message
+            // If the error doesn't disappear comment out following `reraise`.
+            reraise ()
         else
             reraise ()
 

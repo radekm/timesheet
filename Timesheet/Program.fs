@@ -126,6 +126,125 @@ let downloadChannelsAndChatsFromTeams (config : Config.Root) =
     ctx.SaveChanges() |> ignore
     printfn "Data from Teams downloaded and saved"
 
+let downloadMessagesFromTeamsChannel (ctx : Db.TimesheetDbContext) (client : GraphServiceClient) (ch : Db.Channel) =
+    // Update time when the channel was downloaded.
+    ch.LastDownload <- DateTimeOffset.UtcNow
+    let ch : Teams.Channel = Db.convertFromJson ch.Json
+
+    let messagesInDb =
+        query { for m in ctx.ChannelMessages do
+                where (m.ChannelId = ch.Id)
+                select m }
+        |> Seq.map (fun m -> m.Id, m)
+        |> Map.ofSeq
+    printfn "Database has %d messages for channel %s/%s" messagesInDb.Count ch.Team.Name ch.Name
+    let messagesInTeams = (Teams.fetchChannel client ch).Messages
+    printfn "Teams has %d messages" messagesInTeams.Length
+
+    let mutable created = 0
+    let mutable updated = 0
+    let mutable same = 0
+    messagesInTeams
+    |> List.iter (fun m ->
+        let json = Db.convertToJson m
+        // We assume that message cannot change channel.
+        // Otherwise we won't find message in channel `ch`
+        // and because it's not in channel `ch` we try to insert it
+        // which would result in exception because message
+        // with the same id is already in different channel.
+        match messagesInDb |> Map.tryFind m.Message.Id with
+        | None ->
+            created <- created + 1
+            ctx.ChannelMessages.Add { Id = m.Message.Id
+                                      ChannelId = ch.Id
+                                      Created = m.Message.Created
+                                      Json = json
+                                    }
+            |> ignore
+        | Some dbMessage ->
+            if dbMessage.Json <> json then
+                updated <- updated + 1
+                dbMessage.Created <- m.Message.Created
+                dbMessage.Json <- json
+            else same <- same + 1)
+
+    // Save downloaded message to database so we don't lose them
+    // if other call fails.
+    ctx.SaveChanges() |> ignore
+    printfn "%d messages were created, %d messages were updated, %d messages were already up to date"
+        created updated same
+
+let downloadMessagesFromTeamsChat (ctx : Db.TimesheetDbContext) (client : GraphServiceClient) (ch : Db.Chat) =
+    // Update time when the chat was downloaded.
+    ch.LastDownload <- DateTimeOffset.UtcNow
+    let ch : Teams.Chat = Db.convertFromJson ch.Json
+
+    let messagesInDb =
+        query { for m in ctx.ChatMessages do
+                where (m.ChatId = ch.Id)
+                select m }
+        |> Seq.map (fun m -> m.Id, m)
+        |> Map.ofSeq
+    printfn "Database has %d messages for chat %s" messagesInDb.Count ch.Name
+    let messagesInTeams = (Teams.fetchChat client ch).Messages
+    printfn "Teams has %d messages" messagesInTeams.Length
+
+    let mutable created = 0
+    let mutable updated = 0
+    let mutable same = 0
+    messagesInTeams
+    |> List.iter (fun m ->
+        let json = Db.convertToJson m
+        // We assume that message cannot change chat.
+        // Otherwise we won't find message in chat `ch`
+        // and because it's not in chat `ch` we try to insert it
+        // which would result in exception because message
+        // with the same id is already in different chat.
+        match messagesInDb |> Map.tryFind m.Id with
+        | None ->
+            created <- created + 1
+            ctx.ChatMessages.Add { Id = m.Id
+                                   ChatId = ch.Id
+                                   Created = m.Created
+                                   Json = json
+                                 }
+            |> ignore
+        | Some dbMessage ->
+            if dbMessage.Json <> json then
+                updated <- updated + 1
+                dbMessage.Created <- m.Created
+                dbMessage.Json <- json
+            else same <- same + 1)
+
+    // Save downloaded message to database so we don't lose them
+    // if other call fails.
+    ctx.SaveChanges() |> ignore
+    printfn "%d messages were created, %d messages were updated, %d messages were already up to date"
+        created updated same
+
+let downloadMessagesFromTeams (config : Config.Root) (atLeastToDate : DateTime) =
+    let teamsConfig = { Teams.AppId = config.Teams.AppId }
+    use ctx = new Db.TimesheetDbContext()
+    let client = Teams.createClient teamsConfig
+
+    let channelsToDownload =
+        ctx.Channels
+        |> Seq.filter (fun ch -> ch.LastDownload.Date < atLeastToDate)
+        |> Seq.toList
+    printfn "Found %d channels to download messages" channelsToDownload.Length
+
+    channelsToDownload |> List.iter (downloadMessagesFromTeamsChannel ctx client)
+
+    let chatsToDownload =
+        ctx.Chats
+        |> Seq.filter (fun ch -> ch.LastDownload.Date < atLeastToDate)
+        |> Seq.toList
+    printfn "Found %d chats to download messages" chatsToDownload.Length
+
+    chatsToDownload |> List.iter (downloadMessagesFromTeamsChat ctx client)
+
+    printfn "Messages successfully downloaded"
+
 let writeSummary (config : Config.Root) dataFolder (fromDate : DateTime) (toDate : DateTime) =
     let gitLabUserName = config.GitLab.UserName
     let mrs : list<GitLab.MergeRequest> = DataFile.gitLab dataFolder |> DataFile.read
@@ -152,6 +271,9 @@ let main argv =
     | "download-data-gitlab" -> downloadDataFromGitLab config dataFolder
     | "download-data-teams" -> downloadDataFromTeams config dataFolder
     | "download-channels-and-chats-teams" -> downloadChannelsAndChatsFromTeams config
+    | "download-messages-teams" ->
+        let atLeastToDate = DateTime.Parse argv.[3]
+        downloadMessagesFromTeams config atLeastToDate
     | "write-summary" ->
         let fromDate = DateTime.Parse argv.[3]
         let toDate = DateTime.Parse argv.[4]
