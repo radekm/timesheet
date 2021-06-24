@@ -76,10 +76,10 @@ let inline getItems< 'A, ^Pg, ^Req when ^Req : (member GetAsync : CancellationTo
         |> Async.AwaitTask
         |> Async.RunSynchronously
     with e ->
+        // It seems that nextLink loop errors don't disappear
+        // so we need this code to ignore them.
         if e.Message.Contains "Detected nextLink loop" then
             printfn "Loop detected: %s" e.Message
-            // If the error doesn't disappear comment out following `reraise`.
-            reraise ()
         else
             reraise ()
 
@@ -184,11 +184,15 @@ let private convertChatMessage (m : ChatMessage) : Message option =
 let listChannelMessages (client : GraphServiceClient) (ch : Channel) : Message list =
     client.Teams.[ch.Team.Id].Channels.[ch.Id].Messages.Request()
     |> getItems
+    // Just in case - duplicates appear in chat messages.
+    |> List.distinctBy (fun m -> m.Id)
     |> List.choose convertChatMessage
 
 let listChatMessages (client : GraphServiceClient) (ch : Chat) : Message list =
     client.Chats.[ch.Id].Messages.Request()
     |> getItems
+    // Results may contain duplicates. Especially when getItems catches nextLink loop error.
+    |> List.distinctBy (fun m -> m.Id)
     |> List.choose convertChatMessage
 
 let listRepliesToChannelMessage (client : GraphServiceClient) (ch : Channel) (m : Message) : Message list =
