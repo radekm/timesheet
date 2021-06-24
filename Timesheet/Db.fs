@@ -78,3 +78,13 @@ type TimesheetDbContext() =
 
     override _.OnConfiguring(options: DbContextOptionsBuilder) : unit =
         options.UseSqlite("Data Source=Timesheet.db") |> ignore
+
+let queryChannelMessages (ctx : TimesheetDbContext) (ch : Channel) =
+    query { for m in ctx.ChannelMessages do
+            where (m.ChannelId = ch.Id)
+            select m }
+
+let queryChatMessages (ctx : TimesheetDbContext) (ch : Chat) =
+    query { for m in ctx.ChatMessages do
+            where (m.ChatId = ch.Id)
+            select m }

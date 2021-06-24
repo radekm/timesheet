@@ -15,10 +15,6 @@ module DataFile =
         Path.Combine(dataFolder, "GitLab.bin")
         |> Path.GetFullPath
 
-    let teams dataFolder =
-        Path.Combine(dataFolder, "Teams.bin")
-        |> Path.GetFullPath
-
     let read dataFile =
         let ser = FsPickler.CreateBinarySerializer()
         use stream = File.OpenRead dataFile
@@ -40,16 +36,6 @@ let downloadDataFromGitLab (config : Config.Root) dataFolder =
 
     DataFile.write gitLabDataFile mrs
     printfn "Data from GitLab downloaded and saved"
-
-let downloadDataFromTeams (config : Config.Root) dataFolder =
-    let teamsConfig = { Teams.AppId = config.Teams.AppId }
-
-    let teamsDataFile = DataFile.teams dataFolder
-    printfn $"Downloading data from Teams into %s{teamsDataFile}"
-    let conversations = Teams.fetchData teamsConfig
-
-    DataFile.write teamsDataFile conversations
-    printfn "Data from Teams downloaded and saved"
 
 let downloadChannelsFromTeams (ctx : Db.TimesheetDbContext) (client : GraphServiceClient) =
     let channelsInDb = ctx.Channels |> Seq.map (fun ch -> ch.Id, ch) |> Map.ofSeq
@@ -129,14 +115,13 @@ let downloadChannelsAndChatsFromTeams (config : Config.Root) =
 let downloadMessagesFromTeamsChannel (ctx : Db.TimesheetDbContext) (client : GraphServiceClient) (ch : Db.Channel) =
     // Update time when the channel was downloaded.
     ch.LastDownload <- DateTimeOffset.UtcNow
-    let ch : Teams.Channel = Db.convertFromJson ch.Json
 
     let messagesInDb =
-        query { for m in ctx.ChannelMessages do
-                where (m.ChannelId = ch.Id)
-                select m }
+        Db.queryChannelMessages ctx ch
         |> Seq.map (fun m -> m.Id, m)
         |> Map.ofSeq
+
+    let ch : Teams.Channel = Db.convertFromJson ch.Json
     printfn "Database has %d messages for channel %s/%s" messagesInDb.Count ch.Team.Name ch.Name
     let messagesInTeams = (Teams.fetchChannel client ch).Messages
     printfn "Teams has %d messages" messagesInTeams.Length
@@ -172,14 +157,13 @@ let downloadMessagesFromTeamsChannel (ctx : Db.TimesheetDbContext) (client : Gra
 let downloadMessagesFromTeamsChat (ctx : Db.TimesheetDbContext) (client : GraphServiceClient) (ch : Db.Chat) =
     // Update time when the chat was downloaded.
     ch.LastDownload <- DateTimeOffset.UtcNow
-    let ch : Teams.Chat = Db.convertFromJson ch.Json
 
     let messagesInDb =
-        query { for m in ctx.ChatMessages do
-                where (m.ChatId = ch.Id)
-                select m }
+        Db.queryChatMessages ctx ch
         |> Seq.map (fun m -> m.Id, m)
         |> Map.ofSeq
+
+    let ch : Teams.Chat = Db.convertFromJson ch.Json
     printfn "Database has %d messages for chat %s" messagesInDb.Count ch.Name
     let messagesInTeams = (Teams.fetchChat client ch).Messages
     printfn "Teams has %d messages" messagesInTeams.Length
@@ -235,12 +219,37 @@ let downloadMessagesFromTeams (config : Config.Root) (atLeastToDate : DateTime) 
 
     printfn "Messages successfully downloaded"
 
+let readConversationsFromDb (ctx : Db.TimesheetDbContext) : Teams.AllConversations =
+    { Channels =
+        ctx.Channels
+        |> Seq.map (fun ch ->
+            { Channel = Db.convertFromJson ch.Json
+              Messages =
+                  Db.queryChannelMessages ctx ch
+                  |> Seq.map (fun m -> Db.convertFromJson m.Json)
+                  |> Seq.toList
+            } : Teams.ChannelWithMessages)
+        |> Seq.toList
+      Chats =
+        ctx.Chats
+        |> Seq.map (fun ch ->
+            { Chat = Db.convertFromJson ch.Json
+              Messages =
+                  Db.queryChatMessages ctx ch
+                  |> Seq.map (fun m -> Db.convertFromJson m.Json)
+                  |> Seq.toList
+            } : Teams.ChatWithMessages)
+        |> Seq.toList
+    }
+
 let writeSummary (config : Config.Root) dataFolder (fromDate : DateTime) (toDate : DateTime) =
+    use ctx = new Db.TimesheetDbContext()
+
     let gitLabUserName = config.GitLab.UserName
     let mrs : list<GitLab.MergeRequest> = DataFile.gitLab dataFolder |> DataFile.read
 
     let teamsUserId = config.Teams.UserId
-    let conversations : Teams.AllConversations = DataFile.teams dataFolder |> DataFile.read
+    let conversations : Teams.AllConversations = readConversationsFromDb ctx
 
     let report = Report.htmlReport fromDate toDate gitLabUserName teamsUserId mrs conversations
     let html = RenderView.AsBytes.htmlDocument report
@@ -259,7 +268,6 @@ let main argv =
 
     match command with
     | "download-data-gitlab" -> downloadDataFromGitLab config dataFolder
-    | "download-data-teams" -> downloadDataFromTeams config dataFolder
     | "download-channels-and-chats-teams" -> downloadChannelsAndChatsFromTeams config
     | "download-messages-teams" ->
         let atLeastToDate = DateTime.Parse argv.[3]
