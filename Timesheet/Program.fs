@@ -147,11 +147,6 @@ let downloadMessagesFromTeamsChannel (ctx : Db.TimesheetDbContext) (client : Gra
     messagesInTeams
     |> List.iter (fun m ->
         let json = Db.convertToJson m
-        // We assume that message cannot change channel.
-        // Otherwise we won't find message in channel `ch`
-        // and because it's not in channel `ch` we try to insert it
-        // which would result in exception because message
-        // with the same id is already in different channel.
         match messagesInDb |> Map.tryFind m.Message.Id with
         | None ->
             created <- created + 1
@@ -195,11 +190,6 @@ let downloadMessagesFromTeamsChat (ctx : Db.TimesheetDbContext) (client : GraphS
     messagesInTeams
     |> List.iter (fun m ->
         let json = Db.convertToJson m
-        // We assume that message cannot change chat.
-        // Otherwise we won't find message in chat `ch`
-        // and because it's not in chat `ch` we try to insert it
-        // which would result in exception because message
-        // with the same id is already in different chat.
         match messagesInDb |> Map.tryFind m.Id with
         | None ->
             created <- created + 1

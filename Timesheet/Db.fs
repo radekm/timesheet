@@ -18,7 +18,7 @@ type Channel = { [<Key>] Id : string
                  // Navigation properties:
                  Messages : ResizeArray<ChannelMessage>
                }
-and [<CLIMutable>] ChannelMessage = { [<Key>] Id : string
+and [<CLIMutable>] ChannelMessage = { Id : string  // It seems that id is unique only in channel.
                                       ChannelId : string  // FK
                                       mutable Created : DateTimeOffset
                                       mutable Json : string
@@ -33,7 +33,7 @@ type Chat = { [<Key>] Id : string
               // Navigation properties:
               Messages : ResizeArray<ChatMessage>
             }
-and [<CLIMutable>] ChatMessage = { [<Key>] Id : string
+and [<CLIMutable>] ChatMessage = { Id : string  // It seems that id is unique only in channel.
                                    ChatId : string  // FK
                                    mutable Created : DateTimeOffset
                                    mutable Json : string
@@ -65,6 +65,16 @@ type TimesheetDbContext() =
 
     override _.OnModelCreating builder =
         builder.RegisterOptionTypes()
+
+        let entity = builder.Entity<ChannelMessage>()
+        entity
+            .HasKey(fun e -> (e.ChannelId, e.Id) :> obj)
+        |> ignore
+
+        let entity = builder.Entity<ChatMessage>()
+        entity
+            .HasKey(fun e -> (e.ChatId, e.Id) :> obj)
+        |> ignore
 
     override _.OnConfiguring(options: DbContextOptionsBuilder) : unit =
         options.UseSqlite("Data Source=Timesheet.db") |> ignore

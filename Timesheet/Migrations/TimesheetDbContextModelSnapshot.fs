@@ -39,9 +39,9 @@ type TimesheetDbContextModelSnapshot() =
 
         modelBuilder.Entity("Db+ChannelMessage", (fun b ->
 
-            b.Property<string>("Id")
-                .HasColumnType("TEXT") |> ignore
             b.Property<string>("ChannelId")
+                .HasColumnType("TEXT") |> ignore
+            b.Property<string>("Id")
                 .HasColumnType("TEXT") |> ignore
             b.Property<DateTimeOffset>("Created")
                 .IsRequired()
@@ -49,10 +49,7 @@ type TimesheetDbContextModelSnapshot() =
             b.Property<string>("Json")
                 .HasColumnType("TEXT") |> ignore
 
-            b.HasKey("Id") |> ignore
-
-
-            b.HasIndex("ChannelId") |> ignore
+            b.HasKey("ChannelId", "Id") |> ignore
 
             b.ToTable("ChannelMessages") |> ignore
 
@@ -78,9 +75,9 @@ type TimesheetDbContextModelSnapshot() =
 
         modelBuilder.Entity("Db+ChatMessage", (fun b ->
 
-            b.Property<string>("Id")
-                .HasColumnType("TEXT") |> ignore
             b.Property<string>("ChatId")
+                .HasColumnType("TEXT") |> ignore
+            b.Property<string>("Id")
                 .HasColumnType("TEXT") |> ignore
             b.Property<DateTimeOffset>("Created")
                 .IsRequired()
@@ -88,10 +85,7 @@ type TimesheetDbContextModelSnapshot() =
             b.Property<string>("Json")
                 .HasColumnType("TEXT") |> ignore
 
-            b.HasKey("Id") |> ignore
-
-
-            b.HasIndex("ChatId") |> ignore
+            b.HasKey("ChatId", "Id") |> ignore
 
             b.ToTable("ChatMessages") |> ignore
 
@@ -100,12 +94,16 @@ type TimesheetDbContextModelSnapshot() =
         modelBuilder.Entity("Db+ChannelMessage", (fun b ->
             b.HasOne("Db+Channel",null)
                 .WithMany("Messages")
-                .HasForeignKey("ChannelId") |> ignore
+                .HasForeignKey("ChannelId")
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired() |> ignore
         )) |> ignore
 
         modelBuilder.Entity("Db+ChatMessage", (fun b ->
             b.HasOne("Db+Chat",null)
                 .WithMany("Messages")
-                .HasForeignKey("ChatId") |> ignore
+                .HasForeignKey("ChatId")
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired() |> ignore
         )) |> ignore
 
