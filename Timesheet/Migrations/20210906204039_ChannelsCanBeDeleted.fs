@@ -9,10 +9,28 @@ open Microsoft.EntityFrameworkCore.Migrations
 open Microsoft.EntityFrameworkCore.Storage.ValueConversion
 
 [<DbContext(typeof<Db.TimesheetDbContext>)>]
-type TimesheetDbContextModelSnapshot() =
-    inherit ModelSnapshot()
+[<Migration("20210906204039_ChannelsCanBeDeleted")>]
+type ChannelsCanBeDeleted() =
+    inherit Migration()
 
-    override this.BuildModel(modelBuilder: ModelBuilder) =
+    override this.Up(migrationBuilder:MigrationBuilder) =
+        migrationBuilder.AddColumn<bool>(
+            name = "Deleted"
+            ,table = "Channels"
+            ,``type`` = "INTEGER"
+            ,nullable = false
+            ,defaultValue = false
+            ) |> ignore
+
+
+    override this.Down(migrationBuilder:MigrationBuilder) =
+        migrationBuilder.DropColumn(
+            name = "Deleted"
+            ,table = "Channels"
+            ) |> ignore
+
+
+    override this.BuildTargetModel(modelBuilder: ModelBuilder) =
         modelBuilder
             .HasAnnotation("ProductVersion", "5.0.9")
             |> ignore

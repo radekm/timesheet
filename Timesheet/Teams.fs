@@ -233,14 +233,3 @@ let fetchChat (client : GraphServiceClient) (ch : Chat) : ChatWithMessages =
 let createClient (config : Config) =
     let scopesForTeams = ["User.Read"; "Chat.Read"; "Team.ReadBasic.All"; "Channel.ReadBasic.All"]
     GraphServiceClient(DeviceCodeAuth(config.AppId, scopesForTeams))
-
-let fetchData (config : Config) : AllConversations =
-    let client = createClient config
-
-    { Channels =
-          listChannels client
-          |> List.map (fetchChannel client)
-      Chats =
-          listChats client
-          |> List.map (fetchChat client)
-    }

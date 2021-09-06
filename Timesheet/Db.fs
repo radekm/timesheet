@@ -12,6 +12,7 @@ open Microsoft.EntityFrameworkCore
 type Channel = { [<Key>] Id : string
                  mutable Name : string
                  mutable TeamName : string
+                 mutable Deleted : bool
                  mutable Json : string
                  // Last time when all messages from channel were downloaded and stored to db.
                  mutable LastDownload : DateTimeOffset

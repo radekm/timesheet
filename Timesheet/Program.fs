@@ -55,6 +55,7 @@ let downloadChannelsFromTeams (ctx : Db.TimesheetDbContext) (client : GraphServi
             ctx.Channels.Add { Id = ch.Id
                                Name = ch.Name
                                TeamName = ch.Team.Name
+                               Deleted = false
                                Json = json
                                LastDownload = DateTimeOffset.MinValue
                                Messages = ResizeArray()
@@ -65,10 +66,29 @@ let downloadChannelsFromTeams (ctx : Db.TimesheetDbContext) (client : GraphServi
                 updated <- updated + 1
                 dbChannel.Name <- ch.Name
                 dbChannel.TeamName <- ch.Team.Name
+                dbChannel.Deleted <- false
                 dbChannel.Json <- json
             else same <- same + 1)
-    printfn "%d channels will be created, %d channels will be updated, %d channels are already up to date"
-        created updated same
+
+    let mutable deleted = 0
+    let mutable alreadyDeleted = 0
+    let idsOfChannelsInTeams = channelsInTeams |> Seq.map (fun ch -> ch.Id) |> Set.ofSeq
+    channelsInDb
+    |> Map.iter (fun _ dbChannel ->
+        if Set.contains dbChannel.Id idsOfChannelsInTeams |> not then
+            if dbChannel.Deleted
+            then alreadyDeleted <- alreadyDeleted + 1
+            else
+                deleted <- deleted + 1
+                dbChannel.Deleted <- true)
+
+    [ $"%d{created} channels will be created"
+      $"%d{updated} channels will be updated"
+      $"%d{same} channels are already up to date"
+      $"%d{deleted} channels will be marked as deleted"
+      $"%d{alreadyDeleted} channels are already marked as deleted" ]
+    |> String.concat ", "
+    |> printfn "%s"
 
 let downloadChatsFromTeams (ctx : Db.TimesheetDbContext) (client : GraphServiceClient) =
     let chatsInDb = ctx.Chats |> Seq.map (fun ch -> ch.Id, ch) |> Map.ofSeq
@@ -203,6 +223,7 @@ let downloadMessagesFromTeams (config : Config.Root) (atLeastToDate : DateTime) 
 
     let channelsToDownload =
         ctx.Channels
+        |> Seq.filter (fun ch -> not ch.Deleted)
         |> Seq.filter (fun ch -> ch.LastDownload.Date < atLeastToDate)
         |> Seq.toList
     printfn "Found %d channels to download messages" channelsToDownload.Length
