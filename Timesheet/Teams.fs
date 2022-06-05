@@ -1,56 +1,13 @@
 module Teams
 
 open System
-open System.Net.Http
-open System.Net.Http.Headers
 open System.Threading
 open System.Threading.Tasks
 
 open Microsoft.Graph
-open Microsoft.Identity.Client
+open Azure.Identity
 
 type Config = { AppId: string }
-
-/// Authentication provider which shows device code in the console
-/// and waits until the user uses it to authenticate.
-type private DeviceCodeAuth(appId : string, scopes : string list) =
-    let msalClient =
-        PublicClientApplicationBuilder
-            .Create(appId)
-            .WithAuthority(AadAuthorityAudience.AzureAdAndPersonalMicrosoftAccount, true)
-            .Build()
-
-    let mutable userAccount = None
-
-    let getAccessToken () =
-        let executeAsync (builder : AbstractAcquireTokenParameterBuilder<_>) =
-            builder.ExecuteAsync()
-            |> Async.AwaitTask
-        match userAccount with
-        | None -> async {
-            let showDeviceCode (deviceCode : DeviceCodeResult) =
-                // Show device code and instructions where to enter it.
-                printfn "%s" deviceCode.Message
-                Task.CompletedTask
-            let! result =
-                // Waits until user enters device code in MS web page.
-                msalClient.AcquireTokenWithDeviceCode(scopes, fun deviceCode -> showDeviceCode deviceCode)
-                |> executeAsync
-            do userAccount <- Some result.Account
-            return result.AccessToken }
-        | Some account -> async {
-            let! result =
-                // Return cached token or automatically refresh it.
-                msalClient.AcquireTokenSilent(scopes, account)
-                |> executeAsync
-            return result.AccessToken }
-
-    interface IAuthenticationProvider with
-        override _.AuthenticateRequestAsync(request : HttpRequestMessage) =
-            async {
-                let! token = getAccessToken ()
-                request.Headers.Authorization <- AuthenticationHeaderValue("bearer", token)
-            } |> Async.StartAsTask :> Task
 
 let inline getItems< 'A, ^Pg, ^Req when ^Req : (member GetAsync : CancellationToken -> Task<'Pg>)
                                    and  ^Req : (member Client : IBaseClient)
@@ -233,4 +190,11 @@ let fetchChat (client : GraphServiceClient) (ch : Chat) : ChatWithMessages =
 
 let createClient (config : Config) =
     let scopesForTeams = ["User.Read"; "Chat.Read"; "Team.ReadBasic.All"; "Channel.ReadBasic.All"]
-    GraphServiceClient(DeviceCodeAuth(config.AppId, scopesForTeams))
+    let deviceCodeCallback =
+        Func<DeviceCodeInfo, CancellationToken, Task>(
+            fun code _ ->
+                // Show device code and instructions where to enter it.
+                printfn "%s" code.Message
+                Task.CompletedTask)
+    let deviceCodeCredential = DeviceCodeCredential(deviceCodeCallback, config.AppId)
+    GraphServiceClient(deviceCodeCredential, scopesForTeams)
