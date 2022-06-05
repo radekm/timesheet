@@ -66,9 +66,9 @@ let inline getItems< 'A, ^Pg, ^Req when ^Req : (member GetAsync : CancellationTo
         |> Async.RunSynchronously
     let addItem (item : 'A) =
         result.Add item
-        if result.Count > 0 && result.Count % 200 = 0 then
-            Thread.Sleep 5000
+        if result.Count > 0 && result.Count % 50 = 0 then
             printfn "Got %d items. Throttling to prevent getting 'TooManyRequests' error" result.Count
+            Thread.Sleep 10_000
         true
 
     try
@@ -131,6 +131,7 @@ let listChats (client : GraphServiceClient) : Chat list =
     client.Me.Chats.Request()
     |> getItems
     |> List.map (fun ch ->
+        Thread.Sleep 1000
         let topic = Option.ofObj ch.Topic
         let members : User list =
             try
