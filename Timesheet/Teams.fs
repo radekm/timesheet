@@ -85,7 +85,7 @@ let inline getItems< 'A, ^Pg, ^Req when ^Req : (member GetAsync : CancellationTo
 
     result |> Seq.toList
 
-type User = { Id : string; Name : string }
+type User = { Id : string; Name : string option }
 type Team = { Id : string; Name : string }
 // More permissions are needed to list channel members. So we omit that.
 type Channel = { Team : Team; Id : string; Name : string }
@@ -96,7 +96,7 @@ type Chat =
         let topic = me.Topic |> Option.map (sprintf " (%s)") |> Option.defaultValue ""
         let members =
             me.Members
-            |> List.map (fun m -> m.Name)
+            |> List.map (fun m -> Option.defaultValue m.Id m.Name)
             |> String.concat ", "
         sprintf $"%s{members}%s{topic}"
 
@@ -138,7 +138,7 @@ let listChats (client : GraphServiceClient) : Chat list =
                 client.Me.Chats.[ch.Id].Members.Request()
                 |> getItems
                 |> List.map (function
-                    | :? AadUserConversationMember as m -> { Id = m.UserId; Name = m.DisplayName } : User
+                    | :? AadUserConversationMember as m -> { Id = m.UserId; Name = Option.ofObj m.DisplayName } : User
                     | m ->
                         // `m.Id` is generally not user id.
                         failwithf $"Cannot get user id of %s{m.DisplayName}, it has type: %A{m.GetType()}")
@@ -156,7 +156,7 @@ let private convertChatMessage (m : ChatMessage) : Message option =
                 Author =
                     m.From.User
                     |> Option.ofObj
-                    |> Option.map (fun u -> { Id = u.Id; Name = u.DisplayName })
+                    |> Option.map (fun u -> { Id = u.Id; Name = Some u.DisplayName })
                 Created = m.CreatedDateTime.Value
                 Subject =
                     m.Subject
@@ -178,7 +178,7 @@ let private convertChatMessage (m : ChatMessage) : Message option =
                     |> Seq.map (fun m ->
                         match m.Mentioned.User with
                         | null -> Mention.Other m.MentionText
-                        | u -> Mention.User { Id = u.Id; Name = u.DisplayName })
+                        | u -> Mention.User { Id = u.Id; Name = Some u.DisplayName })
                     |> Set.ofSeq
               }
 
