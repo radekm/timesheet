@@ -29,9 +29,10 @@ let inline getItems< 'A, ^Pg, ^Req when ^Req : (member GetAsync : CancellationTo
         true
 
     try
-        PageIterator.CreatePageIterator(client, page, Func<_, _> addItem).IterateAsync()
-        |> Async.AwaitTask
-        |> Async.RunSynchronously
+        PageIterator.CreatePageIterator(client, page, Func<_, _> addItem)
+            .IterateAsync()
+            .GetAwaiter()
+            .GetResult()
     with e ->
         // It seems that nextLink loop errors don't disappear
         // so we need this code to ignore them.
