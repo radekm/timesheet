@@ -102,9 +102,12 @@ let listChats (client : GraphServiceClient) : Chat list =
                         failwithf $"Cannot get user id of %s{m.DisplayName}, it has type: %A{m.GetType()}")
                 // Sorting ensures that output of this function is deterministic.
                 |> List.sortBy (fun user -> user.Id)
-            with _ when ch.ChatType.Value = ChatType.Meeting ->
-                printfn $"Unable to list members of meeting %s{ch.Id} about %A{topic}"
-                []
+            with
+                | _ ->
+                    // We can't list members of meetings. But for old meetings API
+                    // returns chat type `UnknownFutureValue`. 
+                    printfn $"Unable to list members of %A{ch.ChatType} %s{ch.Id} about %A{topic}"
+                    []
         { Id = ch.Id; Members = members; Type = string ch.ChatType.Value; Topic = topic })
 
 let private convertChatMessage (m : ChatMessage) : Message option =
